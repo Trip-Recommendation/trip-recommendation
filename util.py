@@ -9,18 +9,44 @@ from variables import*
 # create a folder named 'data' in the project folder
 
 def get_data():
-    df = pd.read_csv(data_path, index_col=False)
+    df = pd.read_csv(data_path, sep='\t')
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    del df['DESTINATION']
 
-    labels = df['TRIP_ID'].values
+    hotel2id(df)
     onehot_data = onehotEncode_ages(df)
     numeric_data = normalize_data(df)
 
     Inputs = np.hstack((numeric_data,onehot_data))
+    labels = onehotLabels(df)
 
     return Inputs, labels
 
+def hotel2id(df):
+    if not os.path.exists(hotel_dict_path):
+        hotel_dict = {}
+        n_hotels = len(set(df['HOTEL_ID'].values))
+
+        labels = df['HOTEL_ID'].values
+        label_names = df['HOTELS'].values
+        for k, v in zip(labels, label_names):
+            if len(hotel_dict) <= n_hotels and (k not in hotel_dict):
+                hotel_dict[k] = v
+        joblib.dump(hotel_dict, hotel_dict_path)
+
+def onehotLabels(df):
+    labels = df['HOTEL_ID'].values
+    if not os.path.exists(label_encoder_weights):
+        label_encoder = LabelEncoder()
+        label_encoder.fit(labels)
+        joblib.dump(label_encoder, label_encoder_weights)
+
+    label_encoder = joblib.load(label_encoder_weights)
+    labels = label_encoder.transform(labels)
+    return labels
+
 def encode_destination(df):
-    destination = df['DESTINATION'].values
+    destination = df['DISTRICT'].values
     if not os.path.exists(encoder_weights):
         encoder = LabelEncoder()
         encoder.fit(destination)

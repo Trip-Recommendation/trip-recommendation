@@ -6,8 +6,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
 # from tensorflow import keras
-from tensorflow.keras.layers import Dense, Input, Dropout, Embedding, LSTM
-from tensorflow.keras.models import model_from_json, load_model
+from tensorflow.keras.layers import Dense, Input, Dropout
+from tensorflow.keras.models import load_model
 from tensorflow.keras.models import Model
 
 import tensorflow.keras.backend as K
@@ -16,6 +16,7 @@ logging.getLogger('tensorflow').disabled = True
 
 from variables import*
 from util import get_data
+import joblib
 
 '''
 Use following command to run the script
@@ -24,11 +25,13 @@ Use following command to run the script
 '''
 
 class TripRecommendation(object):
-    def __init__(self):
-        Inputs, labels = get_data()
+    def __init__(self, Inputs, labels):
         self.X = Inputs
         self.Y = labels
         self.num_classes = len(set(self.Y))
+        self.label_encoder = joblib.load(label_encoder_weights)
+        self.hotel_dict = joblib.load(hotel_dict_path)
+        print("num. classes : {}".format(len(set(labels))))
         print("Input Shape : {}".format(self.X.shape))
         print("Label Shape : {}".format(self.Y.shape))
 
@@ -55,12 +58,42 @@ class TripRecommendation(object):
                             epochs=num_epoches,
                             validation_split=validation_split
                             )
-        self.save_model(model_weights)
 
-    def save_model(self ,model_weights):
+    def save_model(self):
         self.model.save(model_weights)
 
+    def load_model(self):
+        loaded_model = load_model(model_weights)
+        loaded_model.compile(
+                        loss='sparse_categorical_crossentropy',
+                        optimizer='adam',
+                        metrics=['accuracy']
+                        )
+        self.model = loaded_model
+
+    def run(self):
+        if os.path.exists(model_weights):
+            print("Model Loading !!")
+            self.load_model()
+        else:
+            print("Model Training !!")
+            self.classifier()
+            self.train()
+            self.save_model()
+
+    def prediction(self):
+        user_id = input("Enter user id: ")
+        user_id = int(user_id)
+        input_ = np.array([self.X[user_id,:]])
+        P = self.model.predict(input_).squeeze()
+        Pred = np.argsort(P)[-n_recommendation:]
+
+        labels = self.label_encoder.inverse_transform(Pred)
+        for i, label in enumerate(labels):
+            print("{}. {}".format(i+1, self.hotel_dict[label]))
 
 if __name__ == "__main__":
-    model = TripRecommendation()
-    model.train()
+    Inputs, labels = get_data()
+    model = TripRecommendation(Inputs, labels)
+    model.run()
+    model.prediction()
