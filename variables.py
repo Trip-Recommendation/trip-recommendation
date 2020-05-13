@@ -19,3 +19,7 @@ keep_prob = 0.3
 batch_size = 2
 num_epoches = 40
 validation_split = 0.2
+
+learning_interval = 100
+host = '0.0.0.0'
+port = 5000

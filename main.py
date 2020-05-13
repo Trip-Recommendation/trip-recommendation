@@ -5,12 +5,15 @@ import seaborn as sns
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
+
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 # from tensorflow import keras
 from tensorflow.keras.layers import Dense, Input, Dropout
 from tensorflow.keras.models import load_model
 from tensorflow.keras.models import Model
 
-import tensorflow.keras.backend as K
 import logging
 logging.getLogger('tensorflow').disabled = True
 
@@ -25,15 +28,13 @@ Use following command to run the script
 '''
 
 class TripRecommendation(object):
-    def __init__(self, Inputs, labels):
+    def __init__(self):
+        Inputs, labels = get_data()
         self.X = Inputs
         self.Y = labels
         self.num_classes = len(set(self.Y))
         self.label_encoder = joblib.load(label_encoder_weights)
         self.hotel_dict = joblib.load(hotel_dict_path)
-        print("num. classes : {}".format(len(set(labels))))
-        print("Input Shape : {}".format(self.X.shape))
-        print("Label Shape : {}".format(self.Y.shape))
 
     def classifier(self):
         inputs = Input(shape=(n_features,), name='inputs')
@@ -45,19 +46,28 @@ class TripRecommendation(object):
         self.model = Model(inputs, outputs)
 
     def train(self):
-        self.classifier()
         self.model.compile(
             loss='sparse_categorical_crossentropy',
             optimizer='adam',
             metrics=['accuracy'],
         )
-        self.history = self.model.fit(
-                            self.X,
-                            self.Y,
-                            batch_size=batch_size,
-                            epochs=num_epoches,
-                            validation_split=validation_split
-                            )
+        self.model.fit(
+                self.X,
+                self.Y,
+                batch_size=batch_size,
+                epochs=num_epoches,
+                validation_split=validation_split
+                )
+
+    def finetune(self):
+        inputs = Input(shape=(n_features,), name='inputs')
+        x = inputs
+        for layer in self.model.layers[1:-1]:
+            layer.trainable = False
+            x = layer(x)
+        outputs = Dense(self.num_classes, activation='softmax', name='output')(x)
+
+        self.model = Model(inputs, outputs)
 
     def save_model(self):
         self.model.save(model_weights)
@@ -81,19 +91,19 @@ class TripRecommendation(object):
             self.train()
             self.save_model()
 
-    def prediction(self):
-        user_id = input("Enter user id: ")
+    def run_finetune(self):
+        print("Finetuning !!!")
+        self.load_model()
+        self.finetune()
+        self.train()
+        self.save_model()
+
+    def prediction(self, user_id):
         user_id = int(user_id)
+
         input_ = np.array([self.X[user_id,:]])
         P = self.model.predict(input_).squeeze()
         Pred = np.argsort(P)[-n_recommendation:]
 
         labels = self.label_encoder.inverse_transform(Pred)
-        for i, label in enumerate(labels):
-            print("{}. {}".format(i+1, self.hotel_dict[label]))
-
-if __name__ == "__main__":
-    Inputs, labels = get_data()
-    model = TripRecommendation(Inputs, labels)
-    model.run()
-    model.prediction()
+        return [str(self.hotel_dict[label]) for label in labels]
