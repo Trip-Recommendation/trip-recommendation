@@ -45,7 +45,7 @@ class TripRecommendation(object):
         outputs = Dense(self.num_classes, activation='softmax', name='output')(x)
         self.model = Model(inputs, outputs)
 
-    def train(self):
+    def train(self, verbose):
         self.model.compile(
             loss='sparse_categorical_crossentropy',
             optimizer='adam',
@@ -56,7 +56,8 @@ class TripRecommendation(object):
                 self.Y,
                 batch_size=batch_size,
                 epochs=num_epoches,
-                validation_split=validation_split
+                validation_split=validation_split,
+                verbose=verbose
                 )
 
     def finetune(self):
@@ -81,27 +82,27 @@ class TripRecommendation(object):
                         )
         self.model = loaded_model
 
-    def run(self):
+    def run(self, verbose=1):
         if os.path.exists(model_weights):
-            print("Model Loading !!")
             self.load_model()
         else:
-            print("Model Training !!")
             self.classifier()
-            self.train()
+            self.train(verbose)
             self.save_model()
 
-    def run_finetune(self):
-        print("Finetuning !!!")
+    def run_finetune(self, verbose=0):
         self.load_model()
         self.finetune()
-        self.train()
+        self.train(verbose)
         self.save_model()
 
     def prediction(self, user_id):
         user_id = int(user_id)
+        try:
+            input_ = np.array([self.X[user_id,:]])
+        except:
+            IndexError
 
-        input_ = np.array([self.X[user_id,:]])
         P = self.model.predict(input_).squeeze()
         Pred = np.argsort(P)[-n_recommendation:]
 
